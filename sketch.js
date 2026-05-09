@@ -94,7 +94,7 @@ async function connectBluetooth() {
   try {
     bluetoothDevice = await navigator.bluetooth.requestDevice({
       // 기기 이름 필터 수정됨
-      filters: [{ namePrefix: "ESP32_Keypad" }],
+      filters: [{ namePrefix: "ESP" }],
       optionalServices: [UART_SERVICE_UUID],
     });
     const server = await bluetoothDevice.gatt.connect();
