@@ -1,21 +1,21 @@
 /**
  * sketch.js
- * Boundary X Bluetooth Keypad Logic (ESP32 Version)
+ * Boundary X Bluetooth Keypad Logic (ESP32 Version - TX Fixed)
  */
 
 const UART_SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
-const UART_TX_CHARACTERISTIC_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
-const UART_RX_CHARACTERISTIC_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
+const UART_TX_CHARACTERISTIC_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"; // 쓰기 전용 통로
+const UART_RX_CHARACTERISTIC_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // 읽기 전용 통로
 
 let bluetoothDevice = null;
-let rxCharacteristic = null;
+let rxCharacteristic = null; // 내부적으로 쓰기 권한이 있는 통로가 할당됩니다.
 let isConnected = false;
 let bluetoothStatus = "연결 대기 중"; 
 
 function setup() {
   noCanvas(); 
   createBluetoothUI();
-  createKeypadUI(); // 키패드 생성 함수 호출
+  createKeypadUI(); 
 }
 
 function createBluetoothUI() {
@@ -39,12 +39,10 @@ function createKeypadUI() {
     const keypadContainer = select("#keypad-container");
     if (!keypadContainer) return;
 
-    // 1부터 12까지 버튼 생성
     for (let i = 1; i <= 12; i++) {
-        let btn = createButton(String(i)); // 버튼 텍스트
-        btn.addClass("key-button");        // CSS 클래스 적용
+        let btn = createButton(String(i));
+        btn.addClass("key-button");        
         
-        // 버튼 클릭(터치) 시 이벤트
         btn.mousePressed(() => {
             handleKeypadInput(i);
         });
@@ -53,10 +51,8 @@ function createKeypadUI() {
     }
 }
 
-// 키패드 입력 처리
 function handleKeypadInput(number) {
     if (!isConnected) {
-        // 경고 메시지 수정됨
         alert("먼저 ESP32와 연결해주세요.");
         return;
     }
@@ -64,17 +60,14 @@ function handleKeypadInput(number) {
     const dataToSend = String(number);
     sendBluetoothData(dataToSend);
     
-    // UI 업데이트 (확인 창)
     const display = select("#sentDataDisplay");
     if (display) {
         display.html(dataToSend);
-        // 시각적 효과 (깜빡임)
         display.style("color", "#fff");
         setTimeout(() => display.style("color", "#0f0"), 200);
     }
 }
 
-// UI Color Update Logic
 function updateBluetoothStatusUI(type) {
   const el = select("#bluetoothStatus");
   if (el) {
@@ -93,22 +86,21 @@ function updateBluetoothStatusUI(type) {
 async function connectBluetooth() {
   try {
     bluetoothDevice = await navigator.bluetooth.requestDevice({
-      // 기기 이름 필터 수정됨
       filters: [{ namePrefix: "ESP" }],
       optionalServices: [UART_SERVICE_UUID],
     });
     const server = await bluetoothDevice.gatt.connect();
     const service = await server.getPrimaryService(UART_SERVICE_UUID);
-    rxCharacteristic = await service.getCharacteristic(UART_RX_CHARACTERISTIC_UUID);
-    isConnected = true;
     
-    // Connected (Green)
+    // 핵심 수정 부분: 데이터를 보내기 위해 UART_TX_CHARACTERISTIC_UUID(...0002)를 사용합니다.
+    rxCharacteristic = await service.getCharacteristic(UART_TX_CHARACTERISTIC_UUID);
+    
+    isConnected = true;
     bluetoothStatus = `${bluetoothDevice.name} 연결됨`;
     updateBluetoothStatusUI('connected');
     
   } catch (error) {
     console.error("Connection failed", error);
-    // Error (Red)
     bluetoothStatus = "연결 실패 (다시 시도해주세요)";
     updateBluetoothStatusUI('error');
   }
@@ -122,7 +114,6 @@ function disconnectBluetooth() {
   bluetoothDevice = null;
   rxCharacteristic = null;
   
-  // Default (Grey)
   bluetoothStatus = "연결 해제됨";
   updateBluetoothStatusUI('default');
 }
@@ -131,7 +122,7 @@ async function sendBluetoothData(data) {
   if (!rxCharacteristic || !isConnected) return;
   try {
     const encoder = new TextEncoder();
-    // ESP32 수신부에서 \n을 기준으로 처리하도록 기존 로직 유지
+    // 데이터를 전송할 때 줄바꿈 기호를 포함하여 전송합니다.
     await rxCharacteristic.writeValue(encoder.encode(`${data}\n`));
     console.log("Sent:", data);
   } catch (e) {
